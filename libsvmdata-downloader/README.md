@@ -2,7 +2,7 @@
 
 No need to install. Just clone this repo. 
 Please refer to [documentation](./docs/LibsvmDataset.html) on how to use this code.
-An exmaple is provided [here](./run.py).
+An exmaple is provided [here](./run.py). Or you can refer to this [jupyter notebook](./unitTests.ipynb).
 
 # What are the dependencies?
 
