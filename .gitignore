@@ -1,4 +1,5 @@
 
 libsvmdata-downloader/.ipynb_checkpoints/*
-clean/
-raw/
+clean/*
+raw/*
+__pycache__/*
