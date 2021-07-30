@@ -1,8 +1,12 @@
 # How install?
 
-No need to install. You just need to make sure that you have Python3. The code is tested on Python 3.7.6.
+No need to install. Just clone this repo. 
+Please refer to [documentation](./docs/LibsvmDataset.html) on how to use this code.
+An exmaple is provided [here](./run.py).
 
 # What are the dependencies?
+
+You just need to make sure that you have Python3. The code is tested on Python 3.7.6.
 
 Please refer to the [requirments.txt](requirements.txt). 
 
@@ -16,7 +20,7 @@ To install the `progressbar`, please refer to this [link](https://github.com/WoL
 
 # How to use the code?
 
-Please refer to [documentation](./docs/LibsvmDataset.html)
+
 
 
 
