@@ -17,13 +17,6 @@ To install `sklearn`, please refer to this [link](https://scikit-learn.org/stabl
 To install the `progressbar`, please refer to this [link](https://github.com/WoLpH/python-progressbar).
 
 
-
-# How to use the code?
-
-
-
-
-
 # How to report bugs?
 
 Please open an issue in this GitHub repo.
