@@ -28,9 +28,11 @@
 </summary>
 <pre><code class="python">import os
 from urllib.request import urlretrieve
+from urllib.error import HTTPError
 import progressbar
 from sklearn.datasets import load_svmlight_file, dump_svmlight_file
 import numpy as np
+import glob
 # import subprocess
 # import shlex
 
@@ -83,12 +85,9 @@ class LibsvmDataset:
             &#39;ionosphere_scale&#39;,
             &#39;leu.bz2&#39;, &#39;leu.bz2.t&#39;,
             &#39;liver-disorders&#39;, &#39;liver-disorders.t&#39;,
-            &#39;madelon&#39;, &#39;madelon.t&#39;,
             &#39;mushrooms&#39;,
-            &#39;news20.binary.bz2&#39;,
             &#39;phishing&#39;,
-            &#39;rcv1_train.binary.bz2&#39;,&#39;rcv1_test.binary.bz2&#39;,
-            &#39;real-sim.bz2&#39;, &#39;skin_nonskin&#39;,
+            &#39;skin_nonskin&#39;,
             &#39;splice&#39;, &#39;splice.t&#39;,
             &#39;sonar_scale&#39;,
             &#39;svmguide1&#39;, &#39;svmguide1.t&#39;, &#39;svmguide3&#39;, &#39;svmguide3.t&#39;, 
@@ -96,6 +95,10 @@ class LibsvmDataset:
             &#39;w1a.t&#39;, &#39;w2a.t&#39;, &#39;w3a.t&#39;, &#39;w4a.t&#39;, &#39;w5a.t&#39;, &#39;w6a.t&#39;, &#39;w7a.t&#39;, &#39;w8a.t&#39;
              #&#39;epsilon_normalized.bz2&#39;, &#39;epsilon_normalized.t.bz2&#39;
              #&#39;HIGGS.bz2&#39;,
+             #&#39;madelon&#39;, &#39;madelon.t&#39;,
+             #&#39;news20.binary.bz2&#39;,
+             #&#39;rcv1_train.binary.bz2&#39;,&#39;rcv1_test.binary.bz2&#39;,
+             #&#39;real-sim.bz2&#39;,
         ]        
         self.data_regression = [
             &#39;abalone&#39;,
@@ -183,15 +186,21 @@ class LibsvmDataset:
                 os.makedirs(directory)
             is_downloaded = os.path.exists(f&#34;{directory}/{self.dataset}&#34;)
             if not is_downloaded or force_download:
-                urlretrieve(self.download_url, f&#39;{directory}/{self.dataset}&#39;, self._show_progress)
+                try:
+                    urlretrieve(self.download_url, f&#39;{directory}/{self.dataset}&#39;, self._show_progress)
+                except HTTPError:
+                    print(f&#34;{_bcolors.FAIL}The input or parsed url {self.download_url} is wrong.\n&#34;\
+                          f&#34;Possible cause is that either the dataset:[{self.dataset}] or the task:[{self.task}]&#34;\
+                          f&#34;is not specified correctly.{_bcolors.ENDC}&#34;)
                 #print(&#34;Start downloading... It may take a while&#34;)
                 #subprocess.run([&#39;wget&#39;, &#39;-i&#39;, self.download_url, &#39;-P&#39;, self.download_dir, 
                 #                &#39;-O&#39;, f&#39;{self.download_dir}/{self.dataset}&#39;])
                 if os.path.exists(f&#34;{directory}/{self.dataset}&#34;):
+                    self.download_success = True
                     print(f&#34;{_bcolors.OKGREEN}dataset [{self.dataset}] is downloaded at [{directory}].{_bcolors.ENDC}&#34;)
             else:
                 print(f&#34;{_bcolors.WARNING}The dataset [{self.dataset}] already exists in [{directory}]!{_bcolors.ENDC}&#34;)
-    def _cleanData(self, normalization, binary_label, force_clean):
+    def _cleanData(self, normalization, binary_label, force_clean, clean_verbose):
         &#34;&#34;&#34;
             Load the raw dataset from self.download_dir.
             If normalization is set, it will perform appropriate normalization.
@@ -204,53 +213,67 @@ class LibsvmDataset:
         if not os.path.exists(directory):
             os.makedirs(directory)
         is_cleaned = os.path.exists(f&#34;{directory}/{self.dataset}&#34;)
-        if not is_cleaned or force_clean:
-            data = load_svmlight_file(f&#34;{self.download_dir}/{self.task}/{self.dataset}&#34;)
-            X, y= data[0], data[1]
-            n, p = X.shape
-            # check label for the binary task
-            if self.task == &#39;binary&#39;:
-                y1old, y2old = np.unique(y)
-                if binary_label is not None:
-                    if  binary_label==&#39;{-1,1}&#39;:
-                        y1new, y2new = -1.0, 1.0
-                    elif binary_label==&#39;{0,1}&#39;:
-                        y1new, y2new = 0.0, 1.0
+        if self.download_success:
+            if not is_cleaned or force_clean:
+                try:
+                    data = load_svmlight_file(f&#34;{self.download_dir}/{self.task}/{self.dataset}&#34;)
+                except ValueError:
+                    print(f&#34;{_bcolors.WARNING}Although, you alredy download the data file, the input or parsed url\n&#34;\
+                          f&#34;{self.download_url} is wrong. The chance are that you miss the file extension.\n&#34;\
+                          f&#34;For exmaple, you should use duke.bz2 instead of the duke for the dataset argument.\n&#34;
+                          f&#34;Please check your input dataset:[{self.dataset}].{_bcolors.ENDC}&#34;)
+                    os.remove(f&#34;{self.download_dir}/{self.task}/{self.dataset}&#34;)
+                    print(f&#34;{_bcolors.WARNING}Therefore, no cleaning is performed and the file in {self.download_dir}/{self.task}/{self.dataset} is removed!{_bcolors.ENDC}&#34;)
+                    return
+                X, y= data[0], data[1]
+                n, p = X.shape
+                # check label for the binary task
+                if self.task == &#39;binary&#39;:
+                    y1old, y2old = np.unique(y)
+                    if binary_label is not None:
+                        if  binary_label==&#39;{-1,1}&#39;:
+                            y1new, y2new = -1.0, 1.0
+                        elif binary_label==&#39;{0,1}&#39;:
+                            y1new, y2new = 0.0, 1.0
+                        else:
+                            raise ValueError(f&#34;Unrecognized binary_level: {binary_label}&#34;)
+                        y[y==y1old] = y1new
+                        y[y==y2old] = y2new
+                        print(f&#34;Original y-label range: {{ {y1old}, {y2old} }} -&gt; New y-label range: {{ {np.unique(y)[0]}, {np.unique(y)[1]} }}&#34;)
                     else:
-                        raise ValueError(f&#34;Unrecognized binary_level: {binary_label}&#34;)
-                    y[y==y1old] = y1new
-                    y[y==y2old] = y2new
-                    print(f&#34;Original y-label range: {{ {y1old}, {y2old} }} -&gt; New y-label range: {{ {np.unique(y)[0]}, {np.unique(y)[1]} }}&#34;)
-                else:
-                    raise ValueError(f&#34;{_bcolors.FAIL}You should set the desired binary_level.\n For example, binary_label=&#39;[-1,1]&#39;.{_bcolors.ENDC}&#34;)
-            # check feature range
-            if normalization is not None:
-                print(f&#34;Perform normalization:{normalization}&#34;)
-                if normalization == &#39;feat-11&#39;:
-                    for i in range(p):
-                        temp = X[:,i]
-                        if np.max(temp) &gt; 1.0 or np.min(temp) &lt; -1.0:
-                            X[:,i] /= np.max(np.abs(temp))
-                            if verbose:
-                                print(f&#34;  col:{i}: max:{np.max(temp):3.3e} | min:{np.min(temp):3.3e}\n&#34;\
-                                       &#34;  Apply feature-wise [-1,1] scaling...&#34;)
-                elif normalization == &#39;feat01&#39;:
-                    for i in range(p):
-                        temp = X[:,i]
-                        xmax, xmin = np.max(temp), np.min(temp)
-                        if xmax &gt; 1.0 or  xmin &lt; 0.0:
-                            X[:,i] = (X[:,i] - xmin) / (xmax - xmin)
-                            if verbose:
-                                print(f&#34;  col:{i}: max:{np.max(temp):3.3e} | min:{np.min(temp):3.3e}\n&#34;\
-                                       &#34;  Apply feature-wise [0,1] scaling...&#34;)
-                else:
-                    raise ValueError(f&#34;{_bcolors.FAIL}Unrecognized normalization: {normalization}{_bcolors.ENDC}&#34;)
-            dump_svmlight_file(X, y, f&#34;{directory}/{self.dataset}&#34;)
-            if os.path.exists(f&#34;{directory}/{self.dataset}&#34;):
-                print(f&#34;{_bcolors.OKGREEN}Success: File saved at {directory}/{self.dataset}!{_bcolors.ENDC}&#34;)
-                print(&#34;-*&#34;*30)
+                        raise ValueError(f&#34;{_bcolors.FAIL}You should set the desired binary_level.\n For example, binary_label=&#39;[-1,1]&#39;.{_bcolors.ENDC}&#34;)
+                # check feature range
+                if normalization is not None:
+                    print(f&#34;Perform normalization:{normalization}&#34;)
+                    if normalization == &#39;feat-11&#39;:
+                        for i in range(p):
+                            temp = X[:,i]
+                            if np.max(temp) &gt; 1.0 or np.min(temp) &lt; -1.0:
+                                X[:,i] /= np.max(np.abs(temp))
+                                if clean_verbose:
+                                    print(f&#34;  col:{i}: max:{np.max(temp):3.3e} | min:{np.min(temp):3.3e}\n&#34;\
+                                           &#34;  Apply feature-wise [-1,1] scaling...&#34;)
+                    elif normalization == &#39;feat01&#39;:
+                        for i in range(p):
+                            temp = X[:,i]
+                            xmax, xmin = np.max(temp), np.min(temp)
+                            if xmax &gt; 1.0 or  xmin &lt; 0.0:
+                                X[:,i] = (X[:,i] - xmin) / (xmax - xmin)
+                                if clean_verbose:
+                                    print(f&#34;  col:{i}: max:{np.max(temp):3.3e} | min:{np.min(temp):3.3e}\n&#34;\
+                                           &#34;  Apply feature-wise [0,1] scaling...&#34;)
+                    else:
+                        raise ValueError(f&#34;{_bcolors.FAIL}Unrecognized normalization: {normalization}{_bcolors.ENDC}&#34;)
+                dump_svmlight_file(X, y, f&#34;{directory}/{self.dataset}&#34;)
+                if os.path.exists(f&#34;{directory}/{self.dataset}&#34;):
+                    self.clean_success = True
+                    print(f&#34;{_bcolors.OKGREEN}Success: File saved at [{directory}]!{_bcolors.ENDC}&#34;)
+                    print(&#34;-*&#34;*30)
+            else:
+                 print(f&#34;{_bcolors.WARNING}The cleaned dataset [{self.dataset}] already exists in [{directory}]!{_bcolors.ENDC}&#34;)
         else:
-             print(f&#34;{_bcolors.WARNING}The cleaned dataset [{self.dataset}] already exists in [{directory}]!{_bcolors.ENDC}&#34;)
+            if not is_cleaned:
+                print(f&#34;{_bcolors.WARNING}The dataset [{self.dataset}] does not exist in [{self.download_dir}/{self.task}]! No cleaning is performed.{_bcolors.ENDC}&#34;)
     def getAvailable(self):
             &#34;&#34;&#34;Show supported tasks and for each supported task show avaiable datasets.
             Typical usage example:
@@ -279,10 +302,19 @@ class LibsvmDataset:
         Typical usage example:
 
               libsvm = LibsvmDataset()
+              # usage 1
               libsvm.getAndClean(task=&#34;binary&#34;, dataset=&#34;a1a&#34;, binary_lable=&#39;{-1,1}&#39;, normalization=&#39;feat-11&#39;)
+              # usgae 2
               libsvm.getAndClean(task=&#34;regression&#34;, dataset=&#34;abalone&#34;, normalization=&#39;feat-11&#39;)
+              # usage 3
               libsvm.getAndClean(url=&#39;https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/avazu-app.bz2&#39;,
-                                 binary_lable=&#39;{-1,1}&#39;, normalization=&#39;feat-11&#39;)              
+                                 binary_lable=&#39;{-1,1}&#39;, normalization=&#39;feat-11&#39;)    
+        Warning:
+            To get the correct dataset name, one can either use `getAvailable` method to see all available datasets.
+            Or visit https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/ and get the name of desired datasets.
+            For example, given the download link: https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/avazu-app.bz2
+            the dataset name is avazu-app.bz2 (please keep the .bz2 extension).
+        
         Args:
 
             task: A string specifies the task want to perform. Currently supported {&#39;binary&#39;, &#39;regression&#39;}.
@@ -294,12 +326,12 @@ class LibsvmDataset:
                           If you want to download the &#34;avazu-app.bz2&#34; instance, you can right-click its name and 
                           select &#34;copy link&#34;, then you should get a plain text as
                               &lt;https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/avazu-app.bz2&gt;
-                          Then just provides it as string.
+                          Then just provides it as a string.
             binary_label: If you want to perform binay classification, one can set labels to {-1,1} by providing
                           &#39;{-1,1}&#39;; or set labels to {0,1} by providing &#39;{0,1}&#39;. Default to &#39;{-1,1}&#39;.
             normalization: Perform feature-wise normalization. Currently supported options:
-                             &#39;feat-11&#39;: feature-wise scaling to range [-1,1]
-                             &#39;feat01&#39;: feature-wise scaling to range [0,1]
+                             &#39;feat-11&#39;: feature-wise scaling to range [-1,1].
+                             &#39;feat01&#39;: feature-wise scaling to range [0,1].
                            Default to &#39;{-1,1}&#39;.
             force_download: If set to True, then download the dataset even if it already exists. Default to False.
             force_clean:    If set to True, then clean the dataset even if it already exists in clean folder. Default to False.
@@ -309,15 +341,86 @@ class LibsvmDataset:
         self.download_url = None
         self.task = None
         self.dataset = None 
+        self.download_success = False
+        self.clean_success = False
         self._parseInputs(task, dataset, download_url)
         if self.download_url is not None:
             self._getData(force_download)
             if self.task in [&#34;binary&#34;, &#34;regression&#34;]:
-                self._cleanData(normalization, binary_lable, force_clean)
+                self._cleanData(normalization, binary_lable, force_clean, clean_verbose)
             else:
                 print(f&#34;{_bcolors.WARNING}The clean rule for dataset:{self.dataset} with task:{self.task} is not defined. Hence, no cleaning is performed.{_bcolors.ENDC}&#34;)
         else:
-            print(f&#34;{_bcolors.WARNING}Fail to generate download url, please check your inputs.{_bcolors.ENDC}&#34;)</code></pre>
+            print(f&#34;{_bcolors.WARNING}Fail to generate download url, please check your inputs.{_bcolors.ENDC}&#34;)
+    def getAndCleanFromFile(self, file_path, task=None, binary_lable=&#39;{-1,1}&#39;, normalization=&#39;feat-11&#39;, 
+                            force_download=False, force_clean=False, clean_verbose=True):
+        &#34;&#34;&#34;Download all datasets specified in the text file.
+        
+        Args:
+            file_path: A string points to a text file that store the datasets name, where a single dataset name 
+                       takes a row. See &#34;libsvm_regression.txt&#34; for example. You can also use &#34;#&#34; to comment the 
+                       dataset name to prevent downloading the dataset. The rest arguments please refer to the 
+                       `getAndClean` method.
+             
+        
+        Warning: You should be responsible to make sure all datasets specified in the text file match with the 
+        `task`. Although some sanity checks are performed, there are still many ways to break the code.
+        When the code breaks (i.e., Errors are not catched by my code), chances are high that the dataset name is 
+        not specify correctly. For example, you want to work with the &#34;duke&#34; dataset. You should put &#34;duke.bz2&#34; in 
+        the text file. This is because the current implementation use the dataset name to generate the download url. 
+       
+        
+        Typical usage example:
+        
+            file_path = &#39;./libsvm_regression.txt&#39;
+            libclass.getAndCleanFromFile(file_path,
+                                         task=&#39;regression&#39;, 
+                                         normalization=&#39;feat-11&#39;,
+                                         force_download=False, 
+                                         force_clean=False, 
+                                         clean_verbose=False)
+        &#34;&#34;&#34;
+        # parse file
+        dataset_lst = []
+        with open(file_path, &#39;r&#39;) as f:
+            for line in f.readlines():
+                temp = line.split(&#34;#&#34;)
+                if len(temp) ==  1:
+                    dataset = temp[0].strip()
+                    dataset_lst.append(dataset)
+        print(f&#34;Parsed {len(dataset_lst)} datasets from {file_path}.&#34;)
+        download_count = 0
+        clean_count = 0
+        url = self.task_dict[task][&#34;url&#34;]
+        for dataset in dataset_lst:
+            self.download_url = url + &#34;/&#34; + dataset
+            self.task = task
+            self.dataset = dataset
+            self.download_success = False
+            self.clean_success = False
+            self._getData(force_download)
+            if self.task in [&#34;binary&#34;, &#34;regression&#34;]:
+                self._cleanData(normalization, binary_lable, force_clean, clean_verbose)
+            else:
+                print(f&#34;{_bcolors.WARNING}The clean rule for dataset:{self.dataset} with task:{self.task} is not defined. Hence, no cleaning is performed.{_bcolors.ENDC}&#34;)
+            if self.download_success:
+                download_count += 1
+            if self.clean_success:
+                clean_count += 1
+        msg = &#34;Summary:\n&#34;
+        if download_count == len(dataset_lst) and clean_count == len(dataset_lst):
+            msg += f&#34;{_bcolors.OKGREEN}Plan to download: [{len(dataset_lst)}] datasets|&#34;\
+                   f&#34; Successfully download: [{download_count}] datasets | Successfully clean: [{clean_count}] datasets.{_bcolors.ENDC}&#34;
+        else:
+            msg += f&#34;{_bcolors.WARNING}Plan to download: {len(dataset_lst)} datasets| &#34;\
+                   f&#34;Successfully download: [{download_count}] datasets | Successfully clean: [{clean_count}] datasets.{_bcolors.ENDC}\n&#34;
+            msg += &#34;Potential cause is that some datasets are already downloaded and/or cleaned.\n&#34;
+            number_of_files_download = glob.glob(f&#34;{self.download_dir}/{task}/*&#34;)
+            number_of_files_clean = glob.glob(f&#34;{self.cleand_dir}/{task}/*&#34;)
+            msg += f&#34;[{self.download_dir}/{task}] has [{len(number_of_files_download)}] files and [{self.cleand_dir}/{task}] has [{len(number_of_files_clean)}] files.&#34;
+        print(msg)
+            
+            </code></pre>
 </details>
 </section>
 <section>
@@ -382,12 +485,9 @@ LibsvmDataset class.</p>
             &#39;ionosphere_scale&#39;,
             &#39;leu.bz2&#39;, &#39;leu.bz2.t&#39;,
             &#39;liver-disorders&#39;, &#39;liver-disorders.t&#39;,
-            &#39;madelon&#39;, &#39;madelon.t&#39;,
             &#39;mushrooms&#39;,
-            &#39;news20.binary.bz2&#39;,
             &#39;phishing&#39;,
-            &#39;rcv1_train.binary.bz2&#39;,&#39;rcv1_test.binary.bz2&#39;,
-            &#39;real-sim.bz2&#39;, &#39;skin_nonskin&#39;,
+            &#39;skin_nonskin&#39;,
             &#39;splice&#39;, &#39;splice.t&#39;,
             &#39;sonar_scale&#39;,
             &#39;svmguide1&#39;, &#39;svmguide1.t&#39;, &#39;svmguide3&#39;, &#39;svmguide3.t&#39;, 
@@ -395,6 +495,10 @@ LibsvmDataset class.</p>
             &#39;w1a.t&#39;, &#39;w2a.t&#39;, &#39;w3a.t&#39;, &#39;w4a.t&#39;, &#39;w5a.t&#39;, &#39;w6a.t&#39;, &#39;w7a.t&#39;, &#39;w8a.t&#39;
              #&#39;epsilon_normalized.bz2&#39;, &#39;epsilon_normalized.t.bz2&#39;
              #&#39;HIGGS.bz2&#39;,
+             #&#39;madelon&#39;, &#39;madelon.t&#39;,
+             #&#39;news20.binary.bz2&#39;,
+             #&#39;rcv1_train.binary.bz2&#39;,&#39;rcv1_test.binary.bz2&#39;,
+             #&#39;real-sim.bz2&#39;,
         ]        
         self.data_regression = [
             &#39;abalone&#39;,
@@ -482,15 +586,21 @@ LibsvmDataset class.</p>
                 os.makedirs(directory)
             is_downloaded = os.path.exists(f&#34;{directory}/{self.dataset}&#34;)
             if not is_downloaded or force_download:
-                urlretrieve(self.download_url, f&#39;{directory}/{self.dataset}&#39;, self._show_progress)
+                try:
+                    urlretrieve(self.download_url, f&#39;{directory}/{self.dataset}&#39;, self._show_progress)
+                except HTTPError:
+                    print(f&#34;{_bcolors.FAIL}The input or parsed url {self.download_url} is wrong.\n&#34;\
+                          f&#34;Possible cause is that either the dataset:[{self.dataset}] or the task:[{self.task}]&#34;\
+                          f&#34;is not specified correctly.{_bcolors.ENDC}&#34;)
                 #print(&#34;Start downloading... It may take a while&#34;)
                 #subprocess.run([&#39;wget&#39;, &#39;-i&#39;, self.download_url, &#39;-P&#39;, self.download_dir, 
                 #                &#39;-O&#39;, f&#39;{self.download_dir}/{self.dataset}&#39;])
                 if os.path.exists(f&#34;{directory}/{self.dataset}&#34;):
+                    self.download_success = True
                     print(f&#34;{_bcolors.OKGREEN}dataset [{self.dataset}] is downloaded at [{directory}].{_bcolors.ENDC}&#34;)
             else:
                 print(f&#34;{_bcolors.WARNING}The dataset [{self.dataset}] already exists in [{directory}]!{_bcolors.ENDC}&#34;)
-    def _cleanData(self, normalization, binary_label, force_clean):
+    def _cleanData(self, normalization, binary_label, force_clean, clean_verbose):
         &#34;&#34;&#34;
             Load the raw dataset from self.download_dir.
             If normalization is set, it will perform appropriate normalization.
@@ -503,53 +613,67 @@ LibsvmDataset class.</p>
         if not os.path.exists(directory):
             os.makedirs(directory)
         is_cleaned = os.path.exists(f&#34;{directory}/{self.dataset}&#34;)
-        if not is_cleaned or force_clean:
-            data = load_svmlight_file(f&#34;{self.download_dir}/{self.task}/{self.dataset}&#34;)
-            X, y= data[0], data[1]
-            n, p = X.shape
-            # check label for the binary task
-            if self.task == &#39;binary&#39;:
-                y1old, y2old = np.unique(y)
-                if binary_label is not None:
-                    if  binary_label==&#39;{-1,1}&#39;:
-                        y1new, y2new = -1.0, 1.0
-                    elif binary_label==&#39;{0,1}&#39;:
-                        y1new, y2new = 0.0, 1.0
+        if self.download_success:
+            if not is_cleaned or force_clean:
+                try:
+                    data = load_svmlight_file(f&#34;{self.download_dir}/{self.task}/{self.dataset}&#34;)
+                except ValueError:
+                    print(f&#34;{_bcolors.WARNING}Although, you alredy download the data file, the input or parsed url\n&#34;\
+                          f&#34;{self.download_url} is wrong. The chance are that you miss the file extension.\n&#34;\
+                          f&#34;For exmaple, you should use duke.bz2 instead of the duke for the dataset argument.\n&#34;
+                          f&#34;Please check your input dataset:[{self.dataset}].{_bcolors.ENDC}&#34;)
+                    os.remove(f&#34;{self.download_dir}/{self.task}/{self.dataset}&#34;)
+                    print(f&#34;{_bcolors.WARNING}Therefore, no cleaning is performed and the file in {self.download_dir}/{self.task}/{self.dataset} is removed!{_bcolors.ENDC}&#34;)
+                    return
+                X, y= data[0], data[1]
+                n, p = X.shape
+                # check label for the binary task
+                if self.task == &#39;binary&#39;:
+                    y1old, y2old = np.unique(y)
+                    if binary_label is not None:
+                        if  binary_label==&#39;{-1,1}&#39;:
+                            y1new, y2new = -1.0, 1.0
+                        elif binary_label==&#39;{0,1}&#39;:
+                            y1new, y2new = 0.0, 1.0
+                        else:
+                            raise ValueError(f&#34;Unrecognized binary_level: {binary_label}&#34;)
+                        y[y==y1old] = y1new
+                        y[y==y2old] = y2new
+                        print(f&#34;Original y-label range: {{ {y1old}, {y2old} }} -&gt; New y-label range: {{ {np.unique(y)[0]}, {np.unique(y)[1]} }}&#34;)
                     else:
-                        raise ValueError(f&#34;Unrecognized binary_level: {binary_label}&#34;)
-                    y[y==y1old] = y1new
-                    y[y==y2old] = y2new
-                    print(f&#34;Original y-label range: {{ {y1old}, {y2old} }} -&gt; New y-label range: {{ {np.unique(y)[0]}, {np.unique(y)[1]} }}&#34;)
-                else:
-                    raise ValueError(f&#34;{_bcolors.FAIL}You should set the desired binary_level.\n For example, binary_label=&#39;[-1,1]&#39;.{_bcolors.ENDC}&#34;)
-            # check feature range
-            if normalization is not None:
-                print(f&#34;Perform normalization:{normalization}&#34;)
-                if normalization == &#39;feat-11&#39;:
-                    for i in range(p):
-                        temp = X[:,i]
-                        if np.max(temp) &gt; 1.0 or np.min(temp) &lt; -1.0:
-                            X[:,i] /= np.max(np.abs(temp))
-                            if verbose:
-                                print(f&#34;  col:{i}: max:{np.max(temp):3.3e} | min:{np.min(temp):3.3e}\n&#34;\
-                                       &#34;  Apply feature-wise [-1,1] scaling...&#34;)
-                elif normalization == &#39;feat01&#39;:
-                    for i in range(p):
-                        temp = X[:,i]
-                        xmax, xmin = np.max(temp), np.min(temp)
-                        if xmax &gt; 1.0 or  xmin &lt; 0.0:
-                            X[:,i] = (X[:,i] - xmin) / (xmax - xmin)
-                            if verbose:
-                                print(f&#34;  col:{i}: max:{np.max(temp):3.3e} | min:{np.min(temp):3.3e}\n&#34;\
-                                       &#34;  Apply feature-wise [0,1] scaling...&#34;)
-                else:
-                    raise ValueError(f&#34;{_bcolors.FAIL}Unrecognized normalization: {normalization}{_bcolors.ENDC}&#34;)
-            dump_svmlight_file(X, y, f&#34;{directory}/{self.dataset}&#34;)
-            if os.path.exists(f&#34;{directory}/{self.dataset}&#34;):
-                print(f&#34;{_bcolors.OKGREEN}Success: File saved at {directory}/{self.dataset}!{_bcolors.ENDC}&#34;)
-                print(&#34;-*&#34;*30)
+                        raise ValueError(f&#34;{_bcolors.FAIL}You should set the desired binary_level.\n For example, binary_label=&#39;[-1,1]&#39;.{_bcolors.ENDC}&#34;)
+                # check feature range
+                if normalization is not None:
+                    print(f&#34;Perform normalization:{normalization}&#34;)
+                    if normalization == &#39;feat-11&#39;:
+                        for i in range(p):
+                            temp = X[:,i]
+                            if np.max(temp) &gt; 1.0 or np.min(temp) &lt; -1.0:
+                                X[:,i] /= np.max(np.abs(temp))
+                                if clean_verbose:
+                                    print(f&#34;  col:{i}: max:{np.max(temp):3.3e} | min:{np.min(temp):3.3e}\n&#34;\
+                                           &#34;  Apply feature-wise [-1,1] scaling...&#34;)
+                    elif normalization == &#39;feat01&#39;:
+                        for i in range(p):
+                            temp = X[:,i]
+                            xmax, xmin = np.max(temp), np.min(temp)
+                            if xmax &gt; 1.0 or  xmin &lt; 0.0:
+                                X[:,i] = (X[:,i] - xmin) / (xmax - xmin)
+                                if clean_verbose:
+                                    print(f&#34;  col:{i}: max:{np.max(temp):3.3e} | min:{np.min(temp):3.3e}\n&#34;\
+                                           &#34;  Apply feature-wise [0,1] scaling...&#34;)
+                    else:
+                        raise ValueError(f&#34;{_bcolors.FAIL}Unrecognized normalization: {normalization}{_bcolors.ENDC}&#34;)
+                dump_svmlight_file(X, y, f&#34;{directory}/{self.dataset}&#34;)
+                if os.path.exists(f&#34;{directory}/{self.dataset}&#34;):
+                    self.clean_success = True
+                    print(f&#34;{_bcolors.OKGREEN}Success: File saved at [{directory}]!{_bcolors.ENDC}&#34;)
+                    print(&#34;-*&#34;*30)
+            else:
+                 print(f&#34;{_bcolors.WARNING}The cleaned dataset [{self.dataset}] already exists in [{directory}]!{_bcolors.ENDC}&#34;)
         else:
-             print(f&#34;{_bcolors.WARNING}The cleaned dataset [{self.dataset}] already exists in [{directory}]!{_bcolors.ENDC}&#34;)
+            if not is_cleaned:
+                print(f&#34;{_bcolors.WARNING}The dataset [{self.dataset}] does not exist in [{self.download_dir}/{self.task}]! No cleaning is performed.{_bcolors.ENDC}&#34;)
     def getAvailable(self):
             &#34;&#34;&#34;Show supported tasks and for each supported task show avaiable datasets.
             Typical usage example:
@@ -578,10 +702,19 @@ LibsvmDataset class.</p>
         Typical usage example:
 
               libsvm = LibsvmDataset()
+              # usage 1
               libsvm.getAndClean(task=&#34;binary&#34;, dataset=&#34;a1a&#34;, binary_lable=&#39;{-1,1}&#39;, normalization=&#39;feat-11&#39;)
+              # usgae 2
               libsvm.getAndClean(task=&#34;regression&#34;, dataset=&#34;abalone&#34;, normalization=&#39;feat-11&#39;)
+              # usage 3
               libsvm.getAndClean(url=&#39;https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/avazu-app.bz2&#39;,
-                                 binary_lable=&#39;{-1,1}&#39;, normalization=&#39;feat-11&#39;)              
+                                 binary_lable=&#39;{-1,1}&#39;, normalization=&#39;feat-11&#39;)    
+        Warning:
+            To get the correct dataset name, one can either use `getAvailable` method to see all available datasets.
+            Or visit https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/ and get the name of desired datasets.
+            For example, given the download link: https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/avazu-app.bz2
+            the dataset name is avazu-app.bz2 (please keep the .bz2 extension).
+        
         Args:
 
             task: A string specifies the task want to perform. Currently supported {&#39;binary&#39;, &#39;regression&#39;}.
@@ -593,12 +726,12 @@ LibsvmDataset class.</p>
                           If you want to download the &#34;avazu-app.bz2&#34; instance, you can right-click its name and 
                           select &#34;copy link&#34;, then you should get a plain text as
                               &lt;https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/avazu-app.bz2&gt;
-                          Then just provides it as string.
+                          Then just provides it as a string.
             binary_label: If you want to perform binay classification, one can set labels to {-1,1} by providing
                           &#39;{-1,1}&#39;; or set labels to {0,1} by providing &#39;{0,1}&#39;. Default to &#39;{-1,1}&#39;.
             normalization: Perform feature-wise normalization. Currently supported options:
-                             &#39;feat-11&#39;: feature-wise scaling to range [-1,1]
-                             &#39;feat01&#39;: feature-wise scaling to range [0,1]
+                             &#39;feat-11&#39;: feature-wise scaling to range [-1,1].
+                             &#39;feat01&#39;: feature-wise scaling to range [0,1].
                            Default to &#39;{-1,1}&#39;.
             force_download: If set to True, then download the dataset even if it already exists. Default to False.
             force_clean:    If set to True, then clean the dataset even if it already exists in clean folder. Default to False.
@@ -608,15 +741,84 @@ LibsvmDataset class.</p>
         self.download_url = None
         self.task = None
         self.dataset = None 
+        self.download_success = False
+        self.clean_success = False
         self._parseInputs(task, dataset, download_url)
         if self.download_url is not None:
             self._getData(force_download)
             if self.task in [&#34;binary&#34;, &#34;regression&#34;]:
-                self._cleanData(normalization, binary_lable, force_clean)
+                self._cleanData(normalization, binary_lable, force_clean, clean_verbose)
             else:
                 print(f&#34;{_bcolors.WARNING}The clean rule for dataset:{self.dataset} with task:{self.task} is not defined. Hence, no cleaning is performed.{_bcolors.ENDC}&#34;)
         else:
-            print(f&#34;{_bcolors.WARNING}Fail to generate download url, please check your inputs.{_bcolors.ENDC}&#34;)</code></pre>
+            print(f&#34;{_bcolors.WARNING}Fail to generate download url, please check your inputs.{_bcolors.ENDC}&#34;)
+    def getAndCleanFromFile(self, file_path, task=None, binary_lable=&#39;{-1,1}&#39;, normalization=&#39;feat-11&#39;, 
+                            force_download=False, force_clean=False, clean_verbose=True):
+        &#34;&#34;&#34;Download all datasets specified in the text file.
+        
+        Args:
+            file_path: A string points to a text file that store the datasets name, where a single dataset name 
+                       takes a row. See &#34;libsvm_regression.txt&#34; for example. You can also use &#34;#&#34; to comment the 
+                       dataset name to prevent downloading the dataset. The rest arguments please refer to the 
+                       `getAndClean` method.
+             
+        
+        Warning: You should be responsible to make sure all datasets specified in the text file match with the 
+        `task`. Although some sanity checks are performed, there are still many ways to break the code.
+        When the code breaks (i.e., Errors are not catched by my code), chances are high that the dataset name is 
+        not specify correctly. For example, you want to work with the &#34;duke&#34; dataset. You should put &#34;duke.bz2&#34; in 
+        the text file. This is because the current implementation use the dataset name to generate the download url. 
+       
+        
+        Typical usage example:
+        
+            file_path = &#39;./libsvm_regression.txt&#39;
+            libclass.getAndCleanFromFile(file_path,
+                                         task=&#39;regression&#39;, 
+                                         normalization=&#39;feat-11&#39;,
+                                         force_download=False, 
+                                         force_clean=False, 
+                                         clean_verbose=False)
+        &#34;&#34;&#34;
+        # parse file
+        dataset_lst = []
+        with open(file_path, &#39;r&#39;) as f:
+            for line in f.readlines():
+                temp = line.split(&#34;#&#34;)
+                if len(temp) ==  1:
+                    dataset = temp[0].strip()
+                    dataset_lst.append(dataset)
+        print(f&#34;Parsed {len(dataset_lst)} datasets from {file_path}.&#34;)
+        download_count = 0
+        clean_count = 0
+        url = self.task_dict[task][&#34;url&#34;]
+        for dataset in dataset_lst:
+            self.download_url = url + &#34;/&#34; + dataset
+            self.task = task
+            self.dataset = dataset
+            self.download_success = False
+            self.clean_success = False
+            self._getData(force_download)
+            if self.task in [&#34;binary&#34;, &#34;regression&#34;]:
+                self._cleanData(normalization, binary_lable, force_clean, clean_verbose)
+            else:
+                print(f&#34;{_bcolors.WARNING}The clean rule for dataset:{self.dataset} with task:{self.task} is not defined. Hence, no cleaning is performed.{_bcolors.ENDC}&#34;)
+            if self.download_success:
+                download_count += 1
+            if self.clean_success:
+                clean_count += 1
+        msg = &#34;Summary:\n&#34;
+        if download_count == len(dataset_lst) and clean_count == len(dataset_lst):
+            msg += f&#34;{_bcolors.OKGREEN}Plan to download: [{len(dataset_lst)}] datasets|&#34;\
+                   f&#34; Successfully download: [{download_count}] datasets | Successfully clean: [{clean_count}] datasets.{_bcolors.ENDC}&#34;
+        else:
+            msg += f&#34;{_bcolors.WARNING}Plan to download: {len(dataset_lst)} datasets| &#34;\
+                   f&#34;Successfully download: [{download_count}] datasets | Successfully clean: [{clean_count}] datasets.{_bcolors.ENDC}\n&#34;
+            msg += &#34;Potential cause is that some datasets are already downloaded and/or cleaned.\n&#34;
+            number_of_files_download = glob.glob(f&#34;{self.download_dir}/{task}/*&#34;)
+            number_of_files_clean = glob.glob(f&#34;{self.cleand_dir}/{task}/*&#34;)
+            msg += f&#34;[{self.download_dir}/{task}] has [{len(number_of_files_download)}] files and [{self.cleand_dir}/{task}] has [{len(number_of_files_clean)}] files.&#34;
+        print(msg)</code></pre>
 </details>
 <h3>Methods</h3>
 <dl>
@@ -627,11 +829,19 @@ LibsvmDataset class.</p>
 <div class="desc"><p>Download and clean the dataset.
 Typical usage example:</p>
 <pre><code>  libsvm = LibsvmDataset()
+  # usage 1
   libsvm.getAndClean(task="binary", dataset="a1a", binary_lable='{-1,1}', normalization='feat-11')
+  # usgae 2
   libsvm.getAndClean(task="regression", dataset="abalone", normalization='feat-11')
+  # usage 3
   libsvm.getAndClean(url='https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/avazu-app.bz2',
                      binary_lable='{-1,1}', normalization='feat-11')
 </code></pre>
+<h2 id="warning">Warning</h2>
+<p>To get the correct dataset name, one can either use <code>getAvailable</code> method to see all available datasets.
+Or visit <a href="https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/">https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/</a> and get the name of desired datasets.
+For example, given the download link: <a href="https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/avazu-app.bz2">https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/avazu-app.bz2</a>
+the dataset name is avazu-app.bz2 (please keep the .bz2 extension).</p>
 <h2 id="args">Args</h2>
 <dl>
 <dt><strong><code>task</code></strong></dt>
@@ -646,14 +856,14 @@ One can visit <a href="https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/b
 If you want to download the "avazu-app.bz2" instance, you can right-click its name and
 select "copy link", then you should get a plain text as
 <a href="https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/avazu-app.bz2">https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/avazu-app.bz2</a>
-Then just provides it as string.</dd>
+Then just provides it as a string.</dd>
 <dt><strong><code>binary_label</code></strong></dt>
 <dd>If you want to perform binay classification, one can set labels to {-1,1} by providing
 '{-1,1}'; or set labels to {0,1} by providing '{0,1}'. Default to '{-1,1}'.</dd>
 <dt><strong><code>normalization</code></strong></dt>
 <dd>Perform feature-wise normalization. Currently supported options:
-'feat-11': feature-wise scaling to range [-1,1]
-'feat01': feature-wise scaling to range [0,1]
+'feat-11': feature-wise scaling to range [-1,1].
+'feat01': feature-wise scaling to range [0,1].
 Default to '{-1,1}'.</dd>
 <dt><strong><code>force_download</code></strong></dt>
 <dd>If set to True, then download the dataset even if it already exists. Default to False.</dd>
@@ -674,10 +884,19 @@ Default to '{-1,1}'.</dd>
     Typical usage example:
 
           libsvm = LibsvmDataset()
+          # usage 1
           libsvm.getAndClean(task=&#34;binary&#34;, dataset=&#34;a1a&#34;, binary_lable=&#39;{-1,1}&#39;, normalization=&#39;feat-11&#39;)
+          # usgae 2
           libsvm.getAndClean(task=&#34;regression&#34;, dataset=&#34;abalone&#34;, normalization=&#39;feat-11&#39;)
+          # usage 3
           libsvm.getAndClean(url=&#39;https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/avazu-app.bz2&#39;,
-                             binary_lable=&#39;{-1,1}&#39;, normalization=&#39;feat-11&#39;)              
+                             binary_lable=&#39;{-1,1}&#39;, normalization=&#39;feat-11&#39;)    
+    Warning:
+        To get the correct dataset name, one can either use `getAvailable` method to see all available datasets.
+        Or visit https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/ and get the name of desired datasets.
+        For example, given the download link: https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/avazu-app.bz2
+        the dataset name is avazu-app.bz2 (please keep the .bz2 extension).
+    
     Args:
 
         task: A string specifies the task want to perform. Currently supported {&#39;binary&#39;, &#39;regression&#39;}.
@@ -689,12 +908,12 @@ Default to '{-1,1}'.</dd>
                       If you want to download the &#34;avazu-app.bz2&#34; instance, you can right-click its name and 
                       select &#34;copy link&#34;, then you should get a plain text as
                           &lt;https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/avazu-app.bz2&gt;
-                      Then just provides it as string.
+                      Then just provides it as a string.
         binary_label: If you want to perform binay classification, one can set labels to {-1,1} by providing
                       &#39;{-1,1}&#39;; or set labels to {0,1} by providing &#39;{0,1}&#39;. Default to &#39;{-1,1}&#39;.
         normalization: Perform feature-wise normalization. Currently supported options:
-                         &#39;feat-11&#39;: feature-wise scaling to range [-1,1]
-                         &#39;feat01&#39;: feature-wise scaling to range [0,1]
+                         &#39;feat-11&#39;: feature-wise scaling to range [-1,1].
+                         &#39;feat01&#39;: feature-wise scaling to range [0,1].
                        Default to &#39;{-1,1}&#39;.
         force_download: If set to True, then download the dataset even if it already exists. Default to False.
         force_clean:    If set to True, then clean the dataset even if it already exists in clean folder. Default to False.
@@ -704,15 +923,117 @@ Default to '{-1,1}'.</dd>
     self.download_url = None
     self.task = None
     self.dataset = None 
+    self.download_success = False
+    self.clean_success = False
     self._parseInputs(task, dataset, download_url)
     if self.download_url is not None:
         self._getData(force_download)
         if self.task in [&#34;binary&#34;, &#34;regression&#34;]:
-            self._cleanData(normalization, binary_lable, force_clean)
+            self._cleanData(normalization, binary_lable, force_clean, clean_verbose)
         else:
             print(f&#34;{_bcolors.WARNING}The clean rule for dataset:{self.dataset} with task:{self.task} is not defined. Hence, no cleaning is performed.{_bcolors.ENDC}&#34;)
     else:
         print(f&#34;{_bcolors.WARNING}Fail to generate download url, please check your inputs.{_bcolors.ENDC}&#34;)</code></pre>
+</details>
+</dd>
+<dt id="LibsvmDataset.LibsvmDataset.getAndCleanFromFile"><code class="name flex">
+<span>def <span class="ident">getAndCleanFromFile</span></span>(<span>self, file_path, task=None, binary_lable='{-1,1}', normalization='feat-11', force_download=False, force_clean=False, clean_verbose=True)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Download all datasets specified in the text file.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>file_path</code></strong></dt>
+<dd>A string points to a text file that store the datasets name, where a single dataset name
+takes a row. See "libsvm_regression.txt" for example. You can also use "#" to comment the
+dataset name to prevent downloading the dataset. The rest arguments please refer to the
+<code>getAndClean</code> method.</dd>
+</dl>
+<p>Warning: You should be responsible to make sure all datasets specified in the text file match with the
+<code>task</code>. Although some sanity checks are performed, there are still many ways to break the code.
+When the code breaks (i.e., Errors are not catched by my code), chances are high that the dataset name is
+not specify correctly. For example, you want to work with the "duke" dataset. You should put "duke.bz2" in
+the text file. This is because the current implementation use the dataset name to generate the download url. </p>
+<p>Typical usage example:</p>
+<pre><code>file_path = './libsvm_regression.txt'
+libclass.getAndCleanFromFile(file_path,
+                             task='regression', 
+                             normalization='feat-11',
+                             force_download=False, 
+                             force_clean=False, 
+                             clean_verbose=False)
+</code></pre></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def getAndCleanFromFile(self, file_path, task=None, binary_lable=&#39;{-1,1}&#39;, normalization=&#39;feat-11&#39;, 
+                        force_download=False, force_clean=False, clean_verbose=True):
+    &#34;&#34;&#34;Download all datasets specified in the text file.
+    
+    Args:
+        file_path: A string points to a text file that store the datasets name, where a single dataset name 
+                   takes a row. See &#34;libsvm_regression.txt&#34; for example. You can also use &#34;#&#34; to comment the 
+                   dataset name to prevent downloading the dataset. The rest arguments please refer to the 
+                   `getAndClean` method.
+         
+    
+    Warning: You should be responsible to make sure all datasets specified in the text file match with the 
+    `task`. Although some sanity checks are performed, there are still many ways to break the code.
+    When the code breaks (i.e., Errors are not catched by my code), chances are high that the dataset name is 
+    not specify correctly. For example, you want to work with the &#34;duke&#34; dataset. You should put &#34;duke.bz2&#34; in 
+    the text file. This is because the current implementation use the dataset name to generate the download url. 
+   
+    
+    Typical usage example:
+    
+        file_path = &#39;./libsvm_regression.txt&#39;
+        libclass.getAndCleanFromFile(file_path,
+                                     task=&#39;regression&#39;, 
+                                     normalization=&#39;feat-11&#39;,
+                                     force_download=False, 
+                                     force_clean=False, 
+                                     clean_verbose=False)
+    &#34;&#34;&#34;
+    # parse file
+    dataset_lst = []
+    with open(file_path, &#39;r&#39;) as f:
+        for line in f.readlines():
+            temp = line.split(&#34;#&#34;)
+            if len(temp) ==  1:
+                dataset = temp[0].strip()
+                dataset_lst.append(dataset)
+    print(f&#34;Parsed {len(dataset_lst)} datasets from {file_path}.&#34;)
+    download_count = 0
+    clean_count = 0
+    url = self.task_dict[task][&#34;url&#34;]
+    for dataset in dataset_lst:
+        self.download_url = url + &#34;/&#34; + dataset
+        self.task = task
+        self.dataset = dataset
+        self.download_success = False
+        self.clean_success = False
+        self._getData(force_download)
+        if self.task in [&#34;binary&#34;, &#34;regression&#34;]:
+            self._cleanData(normalization, binary_lable, force_clean, clean_verbose)
+        else:
+            print(f&#34;{_bcolors.WARNING}The clean rule for dataset:{self.dataset} with task:{self.task} is not defined. Hence, no cleaning is performed.{_bcolors.ENDC}&#34;)
+        if self.download_success:
+            download_count += 1
+        if self.clean_success:
+            clean_count += 1
+    msg = &#34;Summary:\n&#34;
+    if download_count == len(dataset_lst) and clean_count == len(dataset_lst):
+        msg += f&#34;{_bcolors.OKGREEN}Plan to download: [{len(dataset_lst)}] datasets|&#34;\
+               f&#34; Successfully download: [{download_count}] datasets | Successfully clean: [{clean_count}] datasets.{_bcolors.ENDC}&#34;
+    else:
+        msg += f&#34;{_bcolors.WARNING}Plan to download: {len(dataset_lst)} datasets| &#34;\
+               f&#34;Successfully download: [{download_count}] datasets | Successfully clean: [{clean_count}] datasets.{_bcolors.ENDC}\n&#34;
+        msg += &#34;Potential cause is that some datasets are already downloaded and/or cleaned.\n&#34;
+        number_of_files_download = glob.glob(f&#34;{self.download_dir}/{task}/*&#34;)
+        number_of_files_clean = glob.glob(f&#34;{self.cleand_dir}/{task}/*&#34;)
+        msg += f&#34;[{self.download_dir}/{task}] has [{len(number_of_files_download)}] files and [{self.cleand_dir}/{task}] has [{len(number_of_files_clean)}] files.&#34;
+    print(msg)</code></pre>
 </details>
 </dd>
 <dt id="LibsvmDataset.LibsvmDataset.getAvailable"><code class="name flex">
@@ -767,6 +1088,7 @@ Typical usage example:</p>
 <h4><code><a title="LibsvmDataset.LibsvmDataset" href="#LibsvmDataset.LibsvmDataset">LibsvmDataset</a></code></h4>
 <ul class="">
 <li><code><a title="LibsvmDataset.LibsvmDataset.getAndClean" href="#LibsvmDataset.LibsvmDataset.getAndClean">getAndClean</a></code></li>
+<li><code><a title="LibsvmDataset.LibsvmDataset.getAndCleanFromFile" href="#LibsvmDataset.LibsvmDataset.getAndCleanFromFile">getAndCleanFromFile</a></code></li>
 <li><code><a title="LibsvmDataset.LibsvmDataset.getAvailable" href="#LibsvmDataset.LibsvmDataset.getAvailable">getAvailable</a></code></li>
 </ul>
 </li>

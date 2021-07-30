@@ -1,0 +1,64 @@
+# a1a
+# a2a
+# a3a
+# a4a
+# a5a
+# a6a
+# a7a
+# a8a
+a9a
+# a1a.t
+# a2a.t
+# a3a.t
+# a4a.t
+# a5a.t
+# a6a.t
+# a7a.t
+# a8a.t
+# a9a.t
+australian
+breast-cancer
+cod-rna
+# cod-rna.t
+# cod-rna.r
+colon-cancer.bz2
+# covtype.libsvm.binary.bz2
+diabetes
+duke.bz2
+fourclass
+german.numer
+# gisette_scale.bz2
+# gisette_scale.t.bz2
+heart
+ijcnn1.bz2
+ionosphere_scale
+leu.bz2
+# leu.bz2.t
+liver-disorders
+# liver-disorders.t
+mushrooms
+phishing
+skin_nonskin
+splice
+# splice.t
+sonar_scale
+# svmguide1
+# svmguide1.t
+svmguide3
+# svmguide3.t
+# w1a
+# w2a
+# w3a
+# w4a
+# w5a
+# w6a
+# w7a
+w8a
+# w1a.t
+# w2a.t
+# w3a.t
+# w4a.t
+# w5a.t
+# w6a.t
+# w7a.t
+# w8a.t
