@@ -1,0 +1,7 @@
+###### Requirements without Version Specifiers ######`
+os
+###### Requirements with Version Specifiers ######`
+urllib.request >= 3.7
+progressbar >= 3.53.1            # Minimum version 4.1.1
+sklearn >=  0.22.1
+numpy >= 1.19.2
