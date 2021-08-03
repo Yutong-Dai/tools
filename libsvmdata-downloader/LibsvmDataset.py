@@ -247,7 +247,7 @@ class LibsvmDataset:
             if not is_cleaned:
                 print(f"{_bcolors.WARNING}The dataset [{self.dataset}] does not exist in [{self.download_dir}/{self.task}]! No cleaning is performed.{_bcolors.ENDC}")
     def getAvailable(self):
-            """Show supported tasks and for each supported task show avaiable datasets.
+            """Show supported tasks and for each supported task show available datasets.
             Typical usage example:
             
                    libsvm = LibsvmDataset()
@@ -265,6 +265,7 @@ class LibsvmDataset:
                     print(f" '{d}'", end=",")
                     if (i +1) % 5 == 0:
                         print("\n")
+                print("\n")        
             print("\n")
     def getAndClean(self, task=None, dataset=None, download_url=None, 
                     binary_lable='{-1,1}', normalization='feat-11',
@@ -276,7 +277,7 @@ class LibsvmDataset:
               libsvm = LibsvmDataset()
               # usage 1
               libsvm.getAndClean(task="binary", dataset="a1a", binary_lable='{-1,1}', normalization='feat-11')
-              # usgae 2
+              # usage 2
               libsvm.getAndClean(task="regression", dataset="abalone", normalization='feat-11')
               # usage 3
               libsvm.getAndClean(url='https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/avazu-app.bz2',
@@ -289,9 +290,9 @@ class LibsvmDataset:
         
         Args:
 
-            task: A string specifies the task want to perform. Currently supported {'binary', 'regression'}.
+            task: A string specifies the task you wish to perform. Currently supported {'binary', 'regression'}.
             dataset: A string specifies the dataset you want to download. Use `getAvailable` method to show all
-                     currently avaiable datasets for any given task.
+                     currently available datasets for any given task.
             download_url: If the desired dataset is not provided for a given task, one can directly provide a url 
                           link to the desired data set. For example, one wants to download the avazu dataset.
                           One can visit https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary.html#avazu.
@@ -299,8 +300,8 @@ class LibsvmDataset:
                           select "copy link", then you should get a plain text as
                               <https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/avazu-app.bz2>
                           Then just provides it as a string.
-            binary_label: If you want to perform binay classification, one can set labels to {-1,1} by providing
-                          '{-1,1}'; or set labels to {0,1} by providing '{0,1}'. Default to '{-1,1}'.
+            binary_label: If you want to perform binary classification, one can set labels to {-1,1} by providing
+                          '{-1,1}'; or set labels to {0,1} by providing '{0,1}'. The default is '{-1,1}'.
             normalization: Perform feature-wise normalization. Currently supported options:
                              'feat-11': feature-wise scaling to range [-1,1].
                              'feat01': feature-wise scaling to range [0,1].
@@ -337,7 +338,7 @@ class LibsvmDataset:
         
         Warning: You should be responsible to make sure all datasets specified in the text file match with the 
         `task`. Although some sanity checks are performed, there are still many ways to break the code.
-        When the code breaks (i.e., Errors are not catched by my code), chances are high that the dataset name is 
+        When the code breaks (i.e., Errors are not caught by my code), chances are high that the dataset name is 
         not specify correctly. For example, you want to work with the "duke" dataset. You should put "duke.bz2" in 
         the text file. This is because the current implementation use the dataset name to generate the download url. 
        
