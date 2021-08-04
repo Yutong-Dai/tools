@@ -2,3 +2,6 @@
 clean
 raw
 __pycache__
+libsvmdata-downloader/unitTests.ipynb
+libsvmdata-downloader/run.py
+libsvmdata-downloader/docs/LibsvmDataset.html

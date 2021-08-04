@@ -123,7 +123,7 @@ class LibsvmDataset:
             if not is_available:
                 print(f"{_bcolors.FAIL}Error occurs!\n"\
                      f"  1.Either the input dataset:[{dataset}] is not intended for the task:[{task}].\n"\
-                     f"  2.Or the input dataset:[{dataset}] is not in the built-in database.\n"\
+                     f"  2.Or the input dataset:[{dataset}] is not supported.\n"\
                      f"If you are sure the latter case happens, you can provide an url pointing to the desired dataset.{_bcolors.ENDC}"
                      )
                 return
@@ -305,7 +305,7 @@ class LibsvmDataset:
             normalization: Perform feature-wise normalization. Currently supported options:
                              'feat-11': feature-wise scaling to range [-1,1].
                              'feat01': feature-wise scaling to range [0,1].
-                           Default to '{-1,1}'.
+                           The default is `feat-11`.
             force_download: If set to True, then download the dataset even if it already exists. Default to False.
             force_clean:    If set to True, then clean the dataset even if it already exists in clean folder. Default to False.
             clean_verbose:  If set to True, will print out which feature being normalized. Default to False.
